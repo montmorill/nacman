@@ -1,9 +1,10 @@
+from functools import cached_property
 from typing import List, Any, Dict
 from datetime import datetime, timedelta
 
 import streamlit as st
 from pyncm import apis
-from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 from streamlit.delta_generator import DeltaGenerator
 
@@ -42,7 +43,7 @@ class Track(BaseEntity):
     music_video_id: int = Field(alias="mv")
     radio_program_id: int = Field(alias="djId")
     popularity: int = Field(alias="pop")
-    qualities: Dict[str, AudioQuality]
+    # qualities: Dict[str, AudioQuality]
 
     @field_validator("publish_time", mode="before")
     @classmethod
@@ -54,30 +55,29 @@ class Track(BaseEntity):
     def parse_duration(cls, v: Any) -> timedelta:
         return timedelta(milliseconds=v) if isinstance(v, int) else v
 
-    @model_validator(mode="before")
-    @classmethod
-    def build_qualities(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            quality_mapping = {
-                "sq": "super",
-                "h": "high",
-                "m": "medium",
-                "l": "low"
-            }
-            data["qualities"] = {
-                quality_mapping[field]: data[field]
-                for field in quality_mapping.keys()
-                if data.get(field) is not None
-                and isinstance(data[field], dict)
-            }
-        return data
+    # @model_validator(mode="before")
+    # @classmethod
+    # def build_qualities(cls, data: Any) -> Any:
+    #     if isinstance(data, dict):
+    #         quality_mapping = {
+    #             "sq": "super",
+    #             "h": "high",
+    #             "m": "medium",
+    #             "l": "low"
+    #         }
+    #         data["qualities"] = {
+    #             quality_mapping[field]: data[field]
+    #             for field in quality_mapping.keys()
+    #             if data.get(field) is not None
+    #             and isinstance(data[field], dict)
+    #         }
+    #     return data
 
+    @cached_property
     def title(self) -> str:
         return f"{self.name} - {', '.join(artist.name for artist in self.artists)}"
 
-    def bind(self, dg: DeltaGenerator):
-        with dg.expander(self.name, expanded=True):
-            detail = apis.track.GetTrackAudio([self.id])
-            st.json(detail, expanded=False)
-            st.audio(detail['data'][0]['url'])
-            st.image(self.album.pic_url)
+    @computed_field
+    @cached_property
+    def detail(self) -> Dict[str, Any]:
+        return apis.track.GetTrackAudio([self.id])["data"][0]
