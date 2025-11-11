@@ -14,7 +14,9 @@ with st.sidebar:
     display = st.pills("Display", options=options, key="display",
                        default=["Cover"], selection_mode="multi")
     limit = st.slider("Limit", key="limit", min_value=1, value=12)
-    quality = st.radio("Quality", AudioQuality, horizontal=True)
+    quality = st.radio("Quality", [
+        quality for quality in AudioQuality
+    ], horizontal=True)
 
 if not (keywords := st.text_input("Search for songs...")):
     st.stop()

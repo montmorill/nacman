@@ -58,23 +58,16 @@ if profile := status["profile"]:  # type: ignore
 
     search, logout, quit = st.columns(3)
 
-    with search:
-        if st.button("Search", "search", width="stretch"):
-            st.switch_page("pages/search.py")
+    search.button("Search", "search", width="stretch",
+                  on_click=lambda: st.switch_page("pages/search.py"))
 
-    with logout:
-        if st.button("Logout", "logout", width="stretch"):
-            LoginLogout()
+    logout.button("Logout", "logout", width="stretch",
+                  on_click=LoginLogout)  # type: ignore
 
-    with quit:
-        if st.button("Quit Session", "quit", width="stretch"):
-            SetCurrentSession(CreateNewSession())
+    quit.button("Quit Session", "quit", width="stretch",
+                on_click=lambda: SetCurrentSession(CreateNewSession()))
 
     st.stop()
-
-if "unikey" not in st.session_state:
-    st.session_state["unikey"] = LoginQrcodeUnikey()["unikey"]  # type: ignore
-
 
 st.text("Welcome! please login via:")
 cellphone, email, cookie = st.tabs(["Cellphone", "Email", "Cookie"])
@@ -87,43 +80,51 @@ with cellphone:
     with captcha:
         left, right = st.columns([0.8, 0.2], vertical_alignment="bottom")
         captcha = left.text_input("Captcha", key="captcha")
-        if right.button("Send Captcha", "send_captcha",
-                        disabled=not phone_valid, width="stretch"):
-            SetSendRegisterVerifcationCodeViaCellphone(phone)
+        right.button("Send Captcha", "send_captcha",
+                     disabled=not phone_valid, width="stretch",
+                     on_click=SetSendRegisterVerifcationCodeViaCellphone,  # type: ignore
+                     args=(phone,))
     with password:
         password = st.text_input("Password", key="password", type="password")
 
-    if st.button("Login", "login", width="stretch",
-                 disabled=not (phone_valid and captcha or password)):
-        LoginViaCellphone(phone, password=password, captcha=captcha)
+    st.button("Login", "login", width="stretch",
+              disabled=not (phone_valid and captcha or password),
+              on_click=LoginViaCellphone,  # type: ignore
+              kwargs=dict(phone=phone, password=password, captcha=captcha))
 
     st.divider()
+
+    if "unikey" not in st.session_state:
+        unikey = LoginQrcodeUnikey()["unikey"]  # type: ignore
+        st.session_state["unikey"] = unikey
+
     url = GetLoginQRCodeUrl(unikey := st.session_state["unikey"])
 
     left, right = st.columns([0.8, 0.2], vertical_alignment="center")
     left.markdown(f"""Or you can login via QR Code with key `{unikey}`.""")
-    if right.button("Refresh Unikey", "refresh", width="stretch"):
-        LoginRefreshToken()
-        st.session_state.pop("unikey")
+    right.button("Refresh Unikey", "refresh", width="stretch",
+                 on_click=lambda: [st.session_state.pop("unikey"),
+                                   LoginRefreshToken()])  # type: ignore
 
     left, right = st.columns(2)
     left.link_button("Scan the QR Code", url=url, width="stretch")
-    if right.button("And Check Here", "check", width="stretch"):
-        # FIXME: Code: 8821, 需要行为验证码验证
-        st.write(LoginQrcodeCheck(unikey))
+    # FIXME: Code: 8821, 需要行为验证码验证
+    right.button("And Check Here", "check", width="stretch",
+                 on_click=lambda: st.write(LoginQrcodeCheck(unikey)))
 
 with email:
     email = st.text_input("Email Address", key="email")
     email_valid = re.match(r"^[\w.%+-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$", email)
     left, right = st.columns([0.8, 0.2], vertical_alignment="bottom")
     password = left.text_input("Password", key="password2", type="password")
-    if right.button("Login", "login2", width="stretch",
-                    disabled=not (email_valid and password)):
-        # FIXME: Code: 8821, 需要行为验证码验证
-        LoginViaEmail(email, password=password)
+    # FIXME: Code: 8821, 需要行为验证码验证
+    right.button("Login", "login2", width="stretch",
+                 disabled=not (email_valid and password),
+                 on_click=LoginViaEmail,  # type: ignore
+                 kwargs=dict(email=email, password=password))
 
 with cookie:
     left, right = st.columns([0.8, 0.2], vertical_alignment="bottom")
     cookie = left.text_input("Cookie", key="cookie")
-    if right.button("Login", "login3", width="stretch", disabled=not cookie):
-        LoginViaCookie(cookie=cookie)
+    right.button("Login", "login3", width="stretch", disabled=not cookie,
+                 on_click=LoginViaCookie, args=(cookie,))  # type: ignore
