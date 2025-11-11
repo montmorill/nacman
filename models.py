@@ -1,18 +1,17 @@
-from functools import cached_property
-from typing import List, Any, Dict
 from datetime import datetime, timedelta
+from enum import StrEnum
+from functools import cache, cached_property
+from typing import Any, List, Dict
 
-import streamlit as st
 from pyncm import apis
-from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
-from streamlit.delta_generator import DeltaGenerator
 
 
-class AudioQuality(BaseModel):
+class AudioInfo(BaseModel):
+    size: int
     bitrate: int = Field(alias="br")
     file_id: int = Field(alias="fid")
-    size: int
     volume_delta: float = Field(alias="vd")
     sample_rate: int = Field(alias="sr")
 
@@ -24,6 +23,9 @@ class BaseEntity(BaseModel):
     translations: List[str] = Field(alias="tns", default_factory=list)
     alias: List[str] = Field(alias="alia", default_factory=list)
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
 
 class Artist(BaseEntity):
     pass
@@ -31,6 +33,13 @@ class Artist(BaseEntity):
 
 class Album(BaseEntity):
     pic_url: str
+
+
+class AudioQuality(StrEnum):
+    LOSSLESS = "lossless"
+    EXHIGH = "exhigh"
+    HIGHER = "higher"
+    STANDARD = "standard"
 
 
 class Track(BaseEntity):
@@ -43,7 +52,7 @@ class Track(BaseEntity):
     music_video_id: int = Field(alias="mv")
     radio_program_id: int = Field(alias="djId")
     popularity: int = Field(alias="pop")
-    # qualities: Dict[str, AudioQuality]
+    qualities: Dict[AudioQuality, AudioInfo]
 
     @field_validator("publish_time", mode="before")
     @classmethod
@@ -55,29 +64,39 @@ class Track(BaseEntity):
     def parse_duration(cls, v: Any) -> timedelta:
         return timedelta(milliseconds=v) if isinstance(v, int) else v
 
-    # @model_validator(mode="before")
-    # @classmethod
-    # def build_qualities(cls, data: Any) -> Any:
-    #     if isinstance(data, dict):
-    #         quality_mapping = {
-    #             "sq": "super",
-    #             "h": "high",
-    #             "m": "medium",
-    #             "l": "low"
-    #         }
-    #         data["qualities"] = {
-    #             quality_mapping[field]: data[field]
-    #             for field in quality_mapping.keys()
-    #             if data.get(field) is not None
-    #             and isinstance(data[field], dict)
-    #         }
-    #     return data
+    @model_validator(mode="before")
+    @classmethod
+    def build_qualities(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            quality_mapping = {
+                "sq": AudioQuality.LOSSLESS,    # 321000+
+                "h":  AudioQuality.EXHIGH,      # 320000
+                "m":  AudioQuality.HIGHER,      # 192000
+                "l":  AudioQuality.STANDARD     # 128000
+            }
+            data["qualities"] = {
+                quality_mapping[field]: data[field]
+                for field in quality_mapping.keys()
+                if data.get(field) is not None
+                and isinstance(data[field], dict)
+            }
+        return data
 
-    @cached_property
+    @property
     def title(self) -> str:
         return f"{self.name} - {', '.join(artist.name for artist in self.artists)}"
 
-    @computed_field
+    @cache
+    def detail(self, quality: AudioQuality = AudioQuality.STANDARD) -> Dict[str, Any]:
+        bitrate = self.qualities[quality].bitrate
+        data = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
+        return data["data"][0]  # type: ignore
+
+    @cache
+    def url(self, quality: AudioQuality = AudioQuality.STANDARD) -> str:
+        return self.detail(quality)["url"]
+
     @cached_property
-    def detail(self) -> Dict[str, Any]:
-        return apis.track.GetTrackAudio([self.id])["data"][0]
+    def lyrics(self) -> str:
+        data = apis.track.GetTrackLyrics(str(self.id))
+        return data #["lrc"]["lyric"]  # type: ignore
