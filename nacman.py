@@ -20,6 +20,8 @@ from pyncm.apis.login import (
 from utils import random_uppercase, fancy_title, emoji_number, eggs
 
 
+LoginViaAnonymousAccount()
+
 title = random_uppercase('nacman')
 
 st.set_page_config(page_title=title, page_icon=":dvd:")
@@ -74,7 +76,6 @@ if "unikey" not in st.session_state:
     st.session_state["unikey"] = LoginQrcodeUnikey()["unikey"]  # type: ignore
 
 
-LoginViaAnonymousAccount()
 st.text("Welcome! please login via:")
 cellphone, email, cookie = st.tabs(["Cellphone", "Email", "Cookie"])
 
