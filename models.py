@@ -92,11 +92,6 @@ class Track(BaseEntity):
         data = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
         return data["data"][0]  # type: ignore
 
-    @cache
-    def url(self, quality: AudioQuality = AudioQuality.STANDARD) -> str:
-        return self.detail(quality)["url"]
-
     @cached_property
     def lyrics(self) -> str:
-        data = apis.track.GetTrackLyrics(str(self.id))
-        return data #["lrc"]["lyric"]  # type: ignore
+        return apis.track.GetTrackLyrics(str(self.id))  # type: ignore

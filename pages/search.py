@@ -10,12 +10,11 @@ st.set_page_config(page_title="Search", page_icon=":dvd:", layout="wide")
 
 with st.sidebar:
     view = st.radio("View", ["List", "Card"], key="view", horizontal=True)
-    options = ["Cover", "Lyrics", "Track ID", "Download", "Detail"]
+    options = ["Cover", "Lyrics", "Track ID", "Quality", "Download", "Details"]
     display = st.pills("Display", options=options, key="display",
                        default=["Cover"], selection_mode="multi")
     limit = st.slider("Limit", key="limit", min_value=1, value=12)
-    qualities = [quality.value for quality in AudioQuality]
-    quality = st.radio("Quality", qualities, key="quality", horizontal=True)
+    quality = st.radio("Quality", AudioQuality, horizontal=True)
 
 if not (keywords := st.text_input("Search for songs...")):
     st.stop()
@@ -32,13 +31,14 @@ if not (tracks := result.get("songs")):
 tracks = [Track(**data) for data in tracks]
 
 
-def download_button(track: Track):
-    stream = requests.get(track.url(quality), stream=True)
+def download_button(track: Track, quality: str):
+    detail = track.detail(quality)
+    stream = requests.get(detail["url"], stream=True)
     st.download_button(
         label="Download",
         data=stream.content,
         on_click=lambda: stream.close(),
-        file_name=f"{track.title}.mp3",
+        file_name=f"{track.title}.{detail['type']}",
         mime="audio/mpeg"
     )
 
@@ -55,13 +55,23 @@ if view == "Card":
                 st.image(track.album.pic_url, caption=caption)
             else:
                 st.text(caption)
-            with st.container(horizontal=True, vertical_alignment="center"):
-                if "Download" in display:
-                    download_button(track)
-                st.audio(track.url(quality))
+            horizontal = "Download" in display and "Quality" not in display
+            with st.container(horizontal=horizontal, horizontal_alignment="center"):
+                placeholder = st.empty()
+                if "Quality" in display:
+                    with st.container(horizontal=True, horizontal_alignment="center"):
+                        quality = st.radio(
+                            "quality", track.qualities.keys(),
+                            key=f"quality_{track.id}",
+                            horizontal=True, label_visibility="collapsed")
+                        if "Download" in display:
+                            download_button(track, quality)
+                elif "Download" in display:
+                    download_button(track, quality)
+                placeholder.audio(track.detail(quality)["url"])
             if "Lyrics" in display:
                 st.write(track.lyrics)
-            if "Detail" in display:
+            if "Details" in display:
                 st.json(track.model_dump_json())
     st.stop()
 
@@ -82,9 +92,8 @@ elif view == "List":
     </style>""")
 
     for track in tracks:
-        with st.container(border=True):
-            info, audio = st.columns(2)
-            with info.container(horizontal=True, vertical_alignment="center"):
+        with st.container(border=True, horizontal="Quality" not in display):
+            with st.container(horizontal=True, vertical_alignment="center"):
                 if "Cover" in display:
                     st.image(track.album.pic_url, width=48)
                 artists = " / ".join(artist.name for artist in track.artists)
@@ -95,11 +104,16 @@ elif view == "List":
                         <div>{track.name}</div>
                         <div class="subtext">{subtext}</div>
                     </div>''')
+                if "Quality" in display:
+                    quality = st.radio(
+                        "quality", track.qualities.keys(),
+                        key=f"quality_{track.id}",
+                        horizontal=True, label_visibility="collapsed")
                 if "Download" in display:
-                    download_button(track)
-            with audio.container(height="stretch", vertical_alignment="center"):
+                    download_button(track, quality)
+            with st.container(height="stretch", vertical_alignment="center"):
                 st.audio(track.detail(quality)["url"])
             if "Lyrics" in display:
                 st.write(track.lyrics)
-            if "Detail" in display:
+            if "Details" in display:
                 st.json(track.model_dump_json())
