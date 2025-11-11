@@ -36,10 +36,10 @@ class Album(BaseEntity):
 
 
 class AudioQuality(StrEnum):
-    LOSSLESS = "lossless"
-    EXHIGH = "exhigh"
-    HIGHER = "higher"
     STANDARD = "standard"
+    HIGHER = "higher"
+    EXHIGH = "exhigh"
+    LOSSLESS = "lossless"
 
 
 class Track(BaseEntity):
@@ -69,10 +69,10 @@ class Track(BaseEntity):
     def build_qualities(cls, data: Any) -> Any:
         if isinstance(data, dict):
             quality_mapping = {
-                "sq": AudioQuality.LOSSLESS,    # 321000+
-                "h":  AudioQuality.EXHIGH,      # 320000
+                "l":  AudioQuality.STANDARD,    # 128000
                 "m":  AudioQuality.HIGHER,      # 192000
-                "l":  AudioQuality.STANDARD     # 128000
+                "h":  AudioQuality.EXHIGH,      # 320000
+                "sq": AudioQuality.LOSSLESS     # 321000+
             }
             data["qualities"] = {
                 quality_mapping[field]: data[field]
@@ -88,7 +88,11 @@ class Track(BaseEntity):
 
     @cache
     def detail(self, quality: AudioQuality = AudioQuality.STANDARD) -> Dict[str, Any]:
-        bitrate = self.qualities[quality].bitrate
+        if quality in self.qualities:
+            bitrate = self.qualities[quality].bitrate
+        else:
+            # fallback to highest quality
+            bitrate = list(self.qualities.values())[-1].bitrate
         data = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
         return data["data"][0]  # type: ignore
 

@@ -94,8 +94,15 @@ elif view == "List":
     </style>""")
 
     for track in tracks:
-        with st.container(border=True, horizontal="Quality" not in display):
-            with st.container(horizontal=True, vertical_alignment="center"):
+        with st.container(border=True):
+            info, audio = st.columns(2)
+            placeholder = info.empty()
+            if "Quality" in display:
+                    quality = st.radio(
+                        "quality", track.qualities.keys(),
+                        key=f"quality_{track.id}",
+                        horizontal=True, label_visibility="collapsed")
+            with placeholder.container(horizontal=True):
                 if "Cover" in display:
                     st.image(track.album.pic_url, width=48)
                 artists = " / ".join(artist.name for artist in track.artists)
@@ -106,14 +113,9 @@ elif view == "List":
                         <div>{track.name}</div>
                         <div class="subtext">{subtext}</div>
                     </div>''')
-                if "Quality" in display:
-                    quality = st.radio(
-                        "quality", track.qualities.keys(),
-                        key=f"quality_{track.id}",
-                        horizontal=True, label_visibility="collapsed")
                 if "Download" in display:
                     download_button(track, quality)
-            with st.container(height="stretch", vertical_alignment="center"):
+            with audio.container(height="stretch", vertical_alignment="center"):
                 st.audio(track.detail(quality)["url"])
             if "Lyrics" in display:
                 st.write(track.lyrics)
