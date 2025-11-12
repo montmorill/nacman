@@ -1,3 +1,4 @@
+from functools import cache
 from math import isqrt
 
 import requests
@@ -10,21 +11,25 @@ st.set_page_config(page_title="Search", page_icon=":dvd:", layout="wide")
 
 with st.sidebar:
     view = st.radio("View", ["List", "Card"], key="view", horizontal=True)
-    options = ["Cover", "Lyrics", "Track ID", "Quality", "Download", "Details"]
+    options = ["Cover", "Quality", "Download", "Lyrics", "Track ID", "Details"]
     display = st.pills("Display", options=options, key="display",
                        default=["Cover"], selection_mode="multi")
-    limit = st.slider("Limit", key="limit", min_value=1, value=12)
-    quality = st.radio("Quality", [
+    limit = st.slider("Limit", key="limit", min_value=1)
+    quality = st.radio("Quality", key="quality", horizontal=True, options=[
         quality for quality in AudioQuality
-    ], horizontal=True)
+    ], help="Will fallback to highest quality if not available.")
 
 if not (keywords := st.text_input("Search for songs...")):
     st.stop()
 
-result = apis.cloudsearch.GetSearchResult(
-    keywords,
-    limit=limit
-)["result"]  # type: ignore
+
+@cache
+def search(keywords, limit):
+    response = apis.cloudsearch.GetSearchResult(keywords, limit=limit)
+    return response["result"]  # type: ignore
+
+
+result = search(keywords, limit)
 
 if not (tracks := result.get("songs")):
     st.error("No tracks found.")
@@ -33,7 +38,7 @@ if not (tracks := result.get("songs")):
 tracks = [Track(**data) for data in tracks]
 
 
-def download_button(track: Track, quality: str):
+def render_download_button(track: Track, quality: str):
     detail = track.detail(quality)
     stream = requests.get(detail["url"], stream=True)
     st.download_button(
@@ -43,6 +48,16 @@ def download_button(track: Track, quality: str):
         file_name=f"{track.title}.{detail['type']}",
         mime="audio/mpeg"
     )
+
+
+def render_lyrics(track: Track):
+    availables = [(key, lyrics) for key, lyrics in track.lyrics if lyrics.text]
+    if len(availables) > 1:
+        tabs = st.tabs([key for (key, _) in availables])
+        for index, (key, lyrics) in enumerate(availables):
+            tabs[index].text(lyrics.text)
+    else:
+        st.text(availables[0][1].text)
 
 
 if view == "Card":
@@ -67,12 +82,12 @@ if view == "Card":
                             key=f"quality_{track.id}",
                             horizontal=True, label_visibility="collapsed")
                         if "Download" in display:
-                            download_button(track, quality)
+                            render_download_button(track, quality)
                 elif "Download" in display:
-                    download_button(track, quality)
+                    render_download_button(track, quality)
                 placeholder.audio(track.detail(quality)["url"])
             if "Lyrics" in display:
-                st.write(track.lyrics)
+                render_lyrics(track)
             if "Details" in display:
                 st.json(track.model_dump_json())
     st.stop()
@@ -98,10 +113,10 @@ elif view == "List":
             info, audio = st.columns(2)
             placeholder = info.empty()
             if "Quality" in display:
-                    quality = st.radio(
-                        "quality", track.qualities.keys(),
-                        key=f"quality_{track.id}",
-                        horizontal=True, label_visibility="collapsed")
+                quality = st.radio(
+                    "quality", track.qualities.keys(),
+                    key=f"quality_{track.id}",
+                    horizontal=True, label_visibility="collapsed")
             with placeholder.container(horizontal=True):
                 if "Cover" in display:
                     st.image(track.album.pic_url, width=48)
@@ -114,10 +129,10 @@ elif view == "List":
                         <div class="subtext">{subtext}</div>
                     </div>''')
                 if "Download" in display:
-                    download_button(track, quality)
+                    render_download_button(track, quality)
             with audio.container(height="stretch", vertical_alignment="center"):
                 st.audio(track.detail(quality)["url"])
             if "Lyrics" in display:
-                st.write(track.lyrics)
+                render_lyrics(track)
             if "Details" in display:
                 st.json(track.model_dump_json())

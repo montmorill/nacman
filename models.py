@@ -4,7 +4,7 @@ from functools import cache, cached_property
 from typing import Any, List, Dict
 
 from pyncm import apis
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field
 from pydantic.alias_generators import to_camel
 
 
@@ -40,6 +40,17 @@ class AudioQuality(StrEnum):
     HIGHER = "higher"
     EXHIGH = "exhigh"
     LOSSLESS = "lossless"
+
+
+class LyricData(BaseModel):
+    version: int = 0
+    text: str = Field(alias="lyric", default="")
+
+
+class TrackLyrics(BaseModel):
+    original: LyricData = Field(alias="lrc")
+    translated: LyricData = Field(alias="tlyric", default_factory=LyricData)
+    romanized: LyricData = Field(alias="romalrc", default_factory=LyricData)
 
 
 class Track(BaseEntity):
@@ -84,18 +95,20 @@ class Track(BaseEntity):
 
     @property
     def title(self) -> str:
-        return f"{self.name} - {', '.join(artist.name for artist in self.artists)}"
-
-    @cache
-    def detail(self, quality: AudioQuality = AudioQuality.STANDARD) -> Dict[str, Any]:
-        if quality in self.qualities:
-            bitrate = self.qualities[quality].bitrate
-        else:
-            # fallback to highest quality
-            bitrate = list(self.qualities.values())[-1].bitrate
-        data = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
-        return data["data"][0]  # type: ignore
+        return f"{self.name} - {'/'.join(artist.name for artist in self.artists)}"
 
     @cached_property
-    def lyrics(self) -> str:
-        return apis.track.GetTrackLyrics(str(self.id))  # type: ignore
+    def highest_quality(self) -> AudioInfo:
+        return max(self.qualities.values(), key=lambda k: k.bitrate)
+
+    @cache
+    def detail(self, quality: AudioQuality) -> Dict[str, Any]:
+        bitrate = self.qualities.get(quality, self.highest_quality).bitrate
+        response = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
+        return response["data"][0]  # type: ignore
+
+    @computed_field
+    @cached_property
+    def lyrics(self) -> TrackLyrics:
+        response = apis.track.GetTrackLyrics(str(self.id))
+        return TrackLyrics(**response)  # type: ignore
