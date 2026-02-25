@@ -1,4 +1,0 @@
-pyncm
-pydantic
-requests
-streamlit

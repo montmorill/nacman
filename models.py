@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from enum import StrEnum
 from functools import cache, cached_property
-from typing import Any, List, Dict
+from typing import Any
 
 from pyncm import apis
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field
@@ -20,8 +20,8 @@ class BaseEntity(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     id: int
     name: str
-    translations: List[str] = Field(alias="tns", default_factory=list)
-    alias: List[str] = Field(alias="alia", default_factory=list)
+    translations: list[str] = Field(alias="tns", default_factory=list)
+    alias: list[str] = Field(alias="alia", default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.id)
@@ -54,7 +54,7 @@ class TrackLyrics(BaseModel):
 
 
 class Track(BaseEntity):
-    artists: List[Artist] = Field(alias="ar")
+    artists: list[Artist] = Field(alias="ar")
     album: Album = Field(alias="al")
     publish_time: datetime
     duration: timedelta = Field(alias="dt")
@@ -63,7 +63,7 @@ class Track(BaseEntity):
     music_video_id: int = Field(alias="mv")
     radio_program_id: int = Field(alias="djId")
     popularity: int = Field(alias="pop")
-    qualities: Dict[AudioQuality, AudioInfo]
+    qualities: dict[AudioQuality, AudioInfo]
 
     @field_validator("publish_time", mode="before")
     @classmethod
@@ -87,7 +87,7 @@ class Track(BaseEntity):
             }
             data["qualities"] = {
                 quality_mapping[field]: data[field]
-                for field in quality_mapping.keys()
+                for field in quality_mapping
                 if data.get(field) is not None
                 and isinstance(data[field], dict)
             }
@@ -102,7 +102,7 @@ class Track(BaseEntity):
         return max(self.qualities.values(), key=lambda k: k.bitrate)
 
     @cache
-    def detail(self, quality: AudioQuality) -> Dict[str, Any]:
+    def detail(self, quality: AudioQuality) -> dict[str, Any]:
         bitrate = self.qualities.get(quality, self.highest_quality).bitrate
         response = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
         return response["data"][0]  # type: ignore

@@ -1,6 +1,6 @@
 import random
 
-eggs = {
+EGGS = {
     "NaCMan": ":rainbow[NaCMan] :dvd:",
     "nAcmAN": ":rainbow[nAcmAN] :dvd:",
     "nACMan": "n:blue[A]:yellow[C]:red[M]an :balloon:",

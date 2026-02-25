@@ -3,9 +3,16 @@ from math import isqrt
 
 import requests
 import streamlit as st
-from pyncm import apis
+from pyncm.apis.cloudsearch import GetSearchResult
 
 from models import AudioQuality, Track
+
+
+@cache
+def search(keyword: str, limit: int):
+    response = GetSearchResult(keyword, limit=limit)
+    return response["result"]  # type: ignore
+
 
 st.set_page_config(page_title="Search", page_icon=":dvd:", layout="wide")
 
@@ -13,23 +20,16 @@ with st.sidebar:
     view = st.radio("View", ["List", "Card"], key="view", horizontal=True)
     options = ["Cover", "Quality", "Download", "Lyrics", "Track ID", "Details"]
     display = st.pills("Display", options=options, key="display",
-                       default=["Cover"], selection_mode="multi")
+                       default=["Cover", "Download"], selection_mode="multi")
     limit = st.slider("Limit", key="limit", min_value=1)
-    quality = st.radio("Quality", key="quality", horizontal=True, options=[
-        quality for quality in AudioQuality
-    ], help="Will fallback to highest quality if not available.")
+    quality = st.radio("Quality", key="quality", horizontal=True, options=list(AudioQuality),
+                       help="Will fallback to highest quality if not available.")
 
-if not (keywords := st.text_input("Search for songs...")):
+if not (keyword := st.text_input("Search for songs...")):
     st.stop()
 
 
-@cache
-def search(keywords, limit):
-    response = apis.cloudsearch.GetSearchResult(keywords, limit=limit)
-    return response["result"]  # type: ignore
-
-
-result = search(keywords, limit)
+result = search(keyword, limit)
 
 if not (tracks := result.get("songs")):
     st.error("No tracks found.")
@@ -43,6 +43,7 @@ def render_download_button(track: Track, quality: str):
     stream = requests.get(detail["url"], stream=True)
     st.download_button(
         label="Download",
+        key=f"download_{track.id}",
         data=stream.content,
         on_click=lambda: stream.close(),
         file_name=f"{track.title}.{detail['type']}",
@@ -54,7 +55,7 @@ def render_lyrics(track: Track):
     availables = [(key, lyrics) for key, lyrics in track.lyrics if lyrics.text]
     if len(availables) > 1:
         tabs = st.tabs([key for (key, _) in availables])
-        for index, (key, lyrics) in enumerate(availables):
+        for index, (_, lyrics) in enumerate(availables):
             tabs[index].text(lyrics.text)
     else:
         st.text(availables[0][1].text)
@@ -102,6 +103,11 @@ elif view == "List":
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .subtext {
             font-size: 0.8em;
             color: rgb(49, 51, 63);
@@ -117,15 +123,14 @@ elif view == "List":
                     "quality", track.qualities.keys(),
                     key=f"quality_{track.id}",
                     horizontal=True, label_visibility="collapsed")
-            with placeholder.container(horizontal=True):
+            with placeholder.container(horizontal=True, vertical_alignment="center"):
                 if "Cover" in display:
                     st.image(track.album.pic_url, width=48)
-                artists = " / ".join(artist.name for artist in track.artists)
-                subtext = artists
+                subtext = " / ".join(artist.name for artist in track.artists)
                 if "Track ID" in display:
                     subtext = f"#{track.id} {subtext}"
                 st.html(f'''<div class="nac-nowrap">
-                        <div>{track.name}</div>
+                        <div class="truncate">{track.name}</div>
                         <div class="subtext">{subtext}</div>
                     </div>''')
                 if "Download" in display:
