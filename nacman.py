@@ -69,20 +69,24 @@ with phone_tab:
     verification_code_tab, password_tab = st.tabs(["Verification Code", "Password"])
 
     with verification_code_tab:
-        left, right = st.columns([0.6, 0.4], vertical_alignment="bottom")
-        verification_code = left.text_input("Verification Code", key="verification_code")
-        right.button("Send Verification Code", key="send_verification_code",
-                     disabled=not phone_valid, width="stretch",
-                     on_click=SetSendRegisterVerifcationCodeViaCellphone,  # type: ignore
-                     args=(phone,))
+        left, right = st.columns([3, 2], vertical_alignment="bottom")
+        sms_code = left.text_input("Verification Code", key="verification_code")
+        right.button(
+            "Send Verification Code", key="send_verification_code",
+            disabled=not phone_valid, width="stretch",
+            on_click=SetSendRegisterVerifcationCodeViaCellphone,  # type: ignore
+            args=(phone,)
+        )
 
     with password_tab:
         password = st.text_input("Password", key="phone_password", type="password")
 
-    st.button("Login", key="phone_login", width="stretch",
-              disabled=not (phone_valid and (verification_code or password)),
-              on_click=LoginViaCellphone,  # type: ignore
-              kwargs=dict(phone=phone, password=password, captcha=verification_code))
+    st.button(
+        "Login", key="phone_login", width="stretch",
+        disabled=not (phone_valid and (sms_code or password)),
+        on_click=LoginViaCellphone,  # type: ignore
+        kwargs=dict(phone=phone, password=password, captcha=sms_code)
+    )
 
     st.divider()
 
@@ -92,37 +96,46 @@ with phone_tab:
 
     url = GetLoginQRCodeUrl(unikey := st.session_state["unikey"])
 
-    left, right = st.columns([0.8, 0.2], vertical_alignment="center")
+    left, right = st.columns([4, 1], vertical_alignment="center")
     left.markdown(f"Or you can login via QR Code with key: `{unikey}`")
-    right.button("Refresh Unikey", key="refresh_unikey", width="stretch",
-                 on_click=lambda: [  # type: ignore
-                     st.session_state.pop("unikey"),
-                     LoginRefreshToken()
-                 ])
+    right.button(
+        "Refresh Unikey", key="refresh_unikey", width="stretch",
+        on_click=lambda: [  # type: ignore
+            st.session_state.pop("unikey"),
+            LoginRefreshToken()
+        ]
+    )
 
     left, right = st.columns(2)
     left.link_button("Scan the QR Code", url=url, width="stretch")
     # FIXME: Code: 8821, 需要行为验证码验证
-    right.button("And Check Here", key="check_qrcode", width="stretch",
-                 on_click=lambda: st.write(LoginQrcodeCheck(unikey)))
+    right.button(
+        "And Check Here", key="check_qrcode", width="stretch",
+        on_click=lambda: st.write(LoginQrcodeCheck(unikey))
+    )
 
 
 with email_tab:
     email = st.text_input("Email Address", key="email")
     email_valid = re.match(r"^[\w.%+-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$", email)
-    left, right = st.columns([0.8, 0.2], vertical_alignment="bottom")
+
+    left, right = st.columns([4, 1], vertical_alignment="bottom")
     password = left.text_input("Password", key="email_password", type="password")
     # FIXME: Code: 8821, 需要行为验证码验证
-    right.button("Login", key="email_login", width="stretch",
-                 disabled=not (email_valid and password),
-                 on_click=LoginViaEmail,  # type: ignore
-                 kwargs=dict(email=email, password=password))
+    right.button(
+        "Login", key="email_login", width="stretch",
+        disabled=not (email_valid and password),
+        on_click=LoginViaEmail,  # type: ignore
+        kwargs=dict(email=email, password=password)
+    )
 
 
 with cookie_tab:
-    left, right = st.columns([0.8, 0.2], vertical_alignment="bottom")
+    left, right = st.columns([4, 1], vertical_alignment="bottom")
     cookie = left.text_input("Cookie (MUSIC_U)", key="cookie")
-    right.button("Login", key="cookie_login", width="stretch",
-                 disabled=not cookie,
-                 on_click=LoginViaCookie,  # type: ignore
-                 args=(cookie,))
+    right.button(
+        "Login", key="cookie_login", width="stretch",
+        disabled=not cookie,
+        on_click=LoginViaCookie,  # type: ignore
+        args=(cookie,)
+    )

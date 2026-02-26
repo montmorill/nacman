@@ -36,10 +36,10 @@ class Album(BaseEntity):
 
 
 class AudioQuality(StrEnum):
-    STANDARD = "standard"
-    HIGHER = "higher"
-    EXHIGH = "exhigh"
-    LOSSLESS = "lossless"
+    STANDARD = "Standard"
+    HIGHER = "Higher"
+    EXHIGH = "ExHigh"
+    LOSSLESS = "Lossless"
 
 
 class LyricData(BaseModel):
