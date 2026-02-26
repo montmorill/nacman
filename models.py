@@ -4,7 +4,7 @@ from functools import cache, cached_property
 from typing import Any
 
 from pyncm import apis
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, computed_field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -98,16 +98,15 @@ class Track(BaseEntity):
         return f"{self.name} - {'/'.join(artist.name for artist in self.artists)}"
 
     @cached_property
-    def highest_quality(self) -> AudioInfo:
-        return max(self.qualities.values(), key=lambda k: k.bitrate)
+    def highest_quality(self) -> AudioQuality:
+        return max(self.qualities.keys(), key=lambda k: self.qualities[k].bitrate)
 
     @cache
     def detail(self, quality: AudioQuality) -> dict[str, Any]:
-        bitrate = self.qualities.get(quality, self.highest_quality).bitrate
+        bitrate = self.qualities.get(quality, self.qualities[self.highest_quality]).bitrate
         response = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
         return response["data"][0]  # type: ignore
 
-    @computed_field
     @cached_property
     def lyrics(self) -> TrackLyrics:
         response = apis.track.GetTrackLyrics(str(self.id))
