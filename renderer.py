@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from enum import StrEnum
-from typing import Any, Callable, Literal, TypedDict
+from typing import Any, Callable, TypedDict
 from urllib.parse import parse_qs, urlencode
 
 import streamlit as st
@@ -242,7 +242,7 @@ class Location(TypedDict):
 
 
 @contextmanager
-def url_params(location_key: str = "location", **params: tuple[str, Callable[[str]]]):
+def url_params(location_key: str = "location", **params: tuple[str, Callable[[str], Any]]):
     """Bidirectional sync between URL search params and session state.
 
     Usage::
