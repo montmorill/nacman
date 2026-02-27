@@ -79,8 +79,9 @@ with details_tab:
     st.json(album.info.model_dump())
 
 with comments_tab:
-    many_emojis = st.checkbox(
-        label="Many Emojis",
-        key="many_emojis",
-    )
-    render_album_comments(album, many_emojis)
+    with st.container(horizontal=True, vertical_alignment="center"):
+        many_emojis = st.checkbox(label="Many Emojis", key="many_emojis")
+        zero_counts = st.checkbox(label="Zero Counts", key="zero_counts")
+
+    render_album_comments(album, many_emojis=many_emojis,
+                          zero_counts=zero_counts)

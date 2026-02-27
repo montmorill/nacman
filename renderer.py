@@ -159,7 +159,8 @@ def render_track_card(
         st.json(track.model_dump())
 
 
-def render_comment(comment: Comment, many_emojis=False, hot=False):
+def render_comment(comment: Comment, hot=False,
+                   many_emojis=False, zero_counts=False):
     st.image(comment.user.avatar_url, width=36)
     with st.container(gap=None):
         emoji = ":fire:" if hot else ":heart:"
@@ -169,7 +170,8 @@ def render_comment(comment: Comment, many_emojis=False, hot=False):
         {
             emoji * comment.liked_count
             if many_emojis else
-            f"{emoji} {comment.liked_count}" if comment.liked_count else ""
+            f"{emoji} {comment.liked_count}"
+            if zero_counts or comment.liked_count else ""
         }
         """)
         st.text(comment.content)
@@ -183,7 +185,7 @@ class AlbumCommentStore(TypedDict):
 
 
 @st.fragment
-def render_album_comments(album: Album, many_emojis=False):
+def render_album_comments(album: Album, **kwargs):
     store_key = f"comments_{album.info.id}"
     sentinel_key = f"comments_sentinel_{album.info.id}"
 
@@ -217,14 +219,14 @@ def render_album_comments(album: Album, many_emojis=False):
     # Hot comments
     for comment in store["hot_comments"]:
         with st.container(horizontal=True):
-            render_comment(comment, many_emojis, hot=True)
+            render_comment(comment, hot=True, **kwargs)
     if store["hot_comments"]:
         st.divider()
 
     # Regular comments
     for comment in store["comments"]:
         with st.container(horizontal=True):
-            render_comment(comment, many_emojis)
+            render_comment(comment, **kwargs)
 
     if store["more"]:
         viewport_sentinel(key=sentinel_key)
