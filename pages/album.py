@@ -2,7 +2,7 @@ import streamlit as st
 from pyncm.apis.album import GetAlbumInfo
 
 from models import Album
-from renderer import (AudioQuality, DisplayOption, render_comment,
+from renderer import (AudioQuality, DisplayOption, render_album_comments,
                       render_track_item, render_track_list_style, url_params)
 
 st.set_page_config(page_title="Album", page_icon=":dvd:", layout="wide")
@@ -79,6 +79,4 @@ with details_tab:
     st.json(album.info.model_dump())
 
 with comments_tab:
-    for comment in album.comments:
-        with st.container(horizontal=True):
-            render_comment(comment)
+    render_album_comments(album)

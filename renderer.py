@@ -6,8 +6,8 @@ from urllib.parse import parse_qs, urlencode
 import streamlit as st
 from streamlit.components.v2 import component
 
-from models import (AudioDetail, AudioQuality, BaseAlbum, BaseTrack, Comment,
-                    Track)
+from models import (Album, AudioDetail, AudioQuality, BaseAlbum, BaseTrack,
+                    Comment)
 
 
 class DisplayOption(StrEnum):
@@ -22,7 +22,7 @@ class DisplayOption(StrEnum):
 
 def render_audio(detail: AudioDetail | None):
     if detail is None:
-        st.error("No audio available due to copyright issues.")
+        st.error("No audio available due to either network or copyright issues.")
     else:
         st.audio(detail.url)
 
@@ -159,11 +159,74 @@ def render_track_card(
         st.json(track.model_dump())
 
 
-def render_comment(comment: Comment):
-    st.image(comment.user.avatar_url, width=32)
+def render_comment(comment: Comment, hot=False):
+    st.image(comment.user.avatar_url, width=36)
     with st.container(gap=None):
-        st.markdown(f"**{comment.user.nickname}** {comment.time_str}")
+        st.markdown(f"""
+        **{comment.user.nickname}**
+        {comment.time_str}
+        {":fire:" if hot else ":heart:" if comment.liked_count else ""}
+        {comment.liked_count if comment.liked_count else ""}
+        """)
         st.text(comment.content)
+
+
+class AlbumCommentStore(TypedDict):
+    hot_comments: list[Comment]
+    comments: list[Comment]
+    page: int
+    more: bool
+
+
+@st.fragment
+def render_album_comments(album: Album):
+    store_key = f"comments_{album.info.id}"
+    sentinel_key = f"comments_sentinel_{album.info.id}"
+
+    # Initialize on first run
+    if store_key not in st.session_state:
+        first_page = album.comments(0)
+        hot = list(first_page.hot_comments)
+        more_hot, page = first_page.more_hot, 0
+        while more_hot:
+            page += 1
+            data = album.comments(page)
+            hot.extend(data.hot_comments)
+            more_hot = data.more_hot
+        st.session_state[store_key] = AlbumCommentStore(
+            hot_comments=hot,
+            comments=list(first_page.comments),
+            page=0,
+            more=first_page.more,
+        )
+
+    # Fetch next page when sentinel fires
+    store: AlbumCommentStore = st.session_state[store_key]
+    trigger = st.session_state.get(sentinel_key)
+    if trigger and trigger.get("visible") and store["more"]:
+        next_page = store["page"] + 1
+        data = album.comments(next_page)
+        store["comments"].extend(data.comments)
+        store["page"] = next_page
+        store["more"] = data.more
+
+    # Hot comments
+    for comment in store["hot_comments"]:
+        with st.container(horizontal=True):
+            render_comment(comment, hot=True)
+    if store["hot_comments"]:
+        st.divider()
+
+    # Regular comments
+    for comment in store["comments"]:
+        with st.container(horizontal=True):
+            render_comment(comment)
+
+    if store["more"]:
+        viewport_sentinel(key=sentinel_key)
+    else:
+        st.divider()
+        st.text("No more comments.", width="stretch", text_alignment="center")
 
 
 class Location(TypedDict):
@@ -239,4 +302,23 @@ use_location = component(
     return () => window.removeEventListener('popstate', updateState);
     }
 """
+)
+
+viewport_sentinel = component(
+    "viewport_sentinel",
+    js="""
+    export default function (component) {
+        const rootMargin = component.data?.rootMargin || '0px';
+        const sentinel = document.createElement('div');
+        sentinel.style.height = '1px';
+        component.parentElement.appendChild(sentinel);
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                component.setTriggerValue('visible', true);
+            }
+        }, { rootMargin });
+        observer.observe(sentinel);
+        return () => { observer.disconnect(); sentinel.remove(); };
+    }
+    """
 )

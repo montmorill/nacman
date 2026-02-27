@@ -168,11 +168,22 @@ class Album(BaseModel):
     songs: list[BaseTrack]
     info: AlbumInfo = Field(alias="album")
 
-    @cached_property
-    def comments(self) -> list["Comment"]:
-        response = GetAlbumComments(str(self.info.id))
-        comments = AlbumComments(**response)  # type: ignore
-        return comments.hot_comments + comments.comments
+    def comments(self, page=0) -> "AlbumComments":
+        CHUNK_SIZE = 20
+        response = GetAlbumComments(
+            album_id=str(self.info.id),
+            offset=page * CHUNK_SIZE,
+            limit=CHUNK_SIZE
+        )
+        try:
+            return AlbumComments(**response)  # type: ignore
+        except ValidationError:
+            st.error(f"Failed to get comments for album {self.info.id}")
+            st.json(response)
+            st.stop()
+
+    def __hash__(self) -> int:
+        return hash(self.info.id)
 
 
 class User(BaseModel):
@@ -196,9 +207,12 @@ class AlbumComments(BaseModel):
     is_musician: bool
     cnum: Literal[0]
     top_comments: list[Comment] = Field(max_length=0)
-    hot_comments: list[Comment]
-    more_hot: bool
-    comment_banner: None
+    hot_comments: list[Comment] = []
+    more_hot: bool = False
+    comment_banner: None = None
     comments: list[Comment]
     total_count: int | None = None
-    more: bool
+    more: bool = False
+
+    def get_comments(self, hot: bool = False) -> list[Comment]:
+        return self.hot_comments if hot else self.comments
