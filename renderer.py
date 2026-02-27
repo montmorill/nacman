@@ -1,9 +1,13 @@
+from contextlib import contextmanager
 from enum import StrEnum
+from typing import Any, Callable, TypedDict
+from urllib.parse import parse_qs, urlencode
 
 import streamlit as st
 from streamlit.components.v2 import component
 
-from models import AudioDetail, AudioQuality, BaseAlbum, BaseTrack, Track
+from models import (AudioDetail, AudioQuality, BaseAlbum, BaseTrack, Comment,
+                    Track)
 
 
 class DisplayOption(StrEnum):
@@ -110,7 +114,7 @@ def render_track_item(
         render_lyrics(track)
 
     if DisplayOption.DETAILS in displays:
-        st.json(track.model_dump_json())
+        st.json(track.model_dump())
 
 
 @st.fragment
@@ -152,7 +156,56 @@ def render_track_card(
         render_lyrics(track)
 
     if DisplayOption.DETAILS in displays:
-        st.json(track.model_dump_json())
+        st.json(track.model_dump())
+
+
+def render_comment(comment: Comment):
+    st.image(comment.user.avatar_url, width=32)
+    with st.container(gap=None):
+        st.markdown(f"**{comment.user.nickname}** {comment.time_str}")
+        st.text(comment.content)
+
+
+class Location(TypedDict):
+    search: str
+    hash: str
+
+
+@contextmanager
+def url_params(location_key: str = "location", **params: tuple[str, Callable[[str]]]):
+    """Bidirectional sync between URL search params and session state.
+
+    Usage::
+
+        with url_params(id=("album_id", int)):
+            album_id = st.number_input("Album ID", key="album_id", step=1)
+
+    Args:
+        **params: url_param=(session_state_key, converter)
+    """
+    synced_key = f"_{location_key}_synced"
+
+    # Read: URL → session_state (first render only)
+    location: Location | None = st.session_state.get(location_key)
+    if location and synced_key not in st.session_state:
+        search_params = parse_qs(location.get("search", ""))
+        for url_param, (state_key, converter) in params.items():
+            if values := search_params.get(url_param):
+                st.session_state[state_key] = converter(values[0])
+        st.session_state[synced_key] = True
+
+    yield
+
+    # Write: session_state → URL
+    data = None
+    if st.session_state.get(synced_key):
+        encoded = {}
+        for url_param, (state_key, converter) in params.items():
+            if (value := st.session_state.get(state_key)) is not None:
+                encoded[url_param] = converter(value)
+        if encoded:
+            data = {"search": urlencode(encoded)}
+    use_location(key=location_key, data=data)
 
 
 use_location = component(
@@ -162,16 +215,16 @@ use_location = component(
     if (component.data !== null) {
         let url = window.location.pathname;
         const search = 'search' in component.data
-        ? component.data.search
-        : window.location.search.slice(1);
+                    ? component.data.search
+                    : window.location.search.slice(1);
         const hash = 'hash' in component.data
-        ? component.data.hash
-        : window.location.hash.slice(1);
+                    ? component.data.hash
+                    : window.location.hash.slice(1);
         if (search) url += '?' + search;
         if (hash) url += '#' + hash;
         if (url !== window.location.pathname
-        + window.location.search
-        + window.location.hash) {
+                    + window.location.search
+                    + window.location.hash) {
         history.pushState({}, '', url);
         }
     }

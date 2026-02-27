@@ -1,21 +1,30 @@
 from datetime import datetime, timedelta
 from enum import StrEnum
 from functools import cache, cached_property
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import (BaseModel, ConfigDict, Field, ValidationError,
+import streamlit as st
+from pydantic import BaseModel as _BaseModel
+from pydantic import (BeforeValidator, ConfigDict, Field, ValidationError,
                       field_validator, model_validator)
 from pydantic.alias_generators import to_camel
-from pyncm import apis
+from pyncm.apis.album import GetAlbumComments
+from pyncm.apis.track import GetTrackAudio, GetTrackLyrics
+
+Timestamp = Annotated[datetime, BeforeValidator(
+    lambda val: datetime.fromtimestamp(val / 1000)
+    if isinstance(val, int) else val)]
 
 
-class BaseEntity(BaseModel):
+class BaseModel(_BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
         validate_by_name=True,
         validate_by_alias=True,
     )
 
+
+class BaseEntity(BaseModel):
     id: int
     name: str
     translations: list[str] = Field(alias="tns", default_factory=list)
@@ -117,27 +126,25 @@ class BaseTrack(BaseEntity):
     def detail(self, quality: AudioQuality) -> AudioDetail | None:
         if (info := self.qualities.get(quality)) is None:
             info = self.qualities[self.highest_quality]
-        response = apis.track.GetTrackAudio([self.id], bitrate=info.bit_rate)
+        response = GetTrackAudio([self.id], bitrate=info.bit_rate)
         try:
-            return AudioDetail(**response["data"][0])# type: ignore
+            return AudioDetail(**response["data"][0])  # type: ignore
+        except KeyError:
+            st.error(f"Failed to get audio detail for track {self.id}")
+            st.json(response)
         except ValidationError:
             return None
 
     @cached_property
     def lyrics(self) -> TrackLyrics:
-        response = apis.track.GetTrackLyrics(str(self.id))
+        response = GetTrackLyrics(str(self.id))
         return TrackLyrics(**response)  # type: ignore
 
 
 class Track(BaseTrack):
     album: BaseAlbum = Field(alias="al")
-    publish_time: datetime
     is_single: bool = Field(alias="single")
-
-    @field_validator("publish_time", mode="before")
-    @classmethod
-    def parse_publish_time(cls, v: Any) -> datetime:
-        return datetime.fromtimestamp(v / 1000) if isinstance(v, int) else v
+    publish_time: Timestamp
 
 
 class AlbumInfo(BaseAlbum):
@@ -151,11 +158,47 @@ class AlbumInfo(BaseAlbum):
     type: str
     sub_type: str
     size: int
-    tag: str = ""
+    tag: None = None
     award_tags: None
     display_tags: None
+    publish_time: Timestamp
 
 
 class Album(BaseModel):
     songs: list[BaseTrack]
     info: AlbumInfo = Field(alias="album")
+
+    @cached_property
+    def comments(self) -> list["Comment"]:
+        response = GetAlbumComments(str(self.info.id))
+        comments = AlbumComments(**response)  # type: ignore
+        return comments.hot_comments + comments.comments
+
+
+class User(BaseModel):
+    user_id: int
+    nickname: str
+    avatar_url: str
+
+
+class Comment(BaseModel):
+    comment_id: int
+    user: User
+    content: str
+    rich_content: str
+    time: Timestamp
+    time_str: str
+    liked_count: int
+    parent_comment_id: int = 0
+
+
+class AlbumComments(BaseModel):
+    is_musician: bool
+    cnum: Literal[0]
+    top_comments: list[Comment] = Field(max_length=0)
+    hot_comments: list[Comment]
+    more_hot: bool
+    comment_banner: None
+    comments: list[Comment]
+    total_count: int | None = None
+    more: bool
