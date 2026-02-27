@@ -2,26 +2,21 @@ import re
 from datetime import date, datetime
 
 import streamlit as st
-from pyncm.apis.login import (
-    GetCurrentLoginStatus,
-    GetLoginQRCodeUrl,
-    LoginLogout,
-    LoginQrcodeCheck,
-    LoginQrcodeUnikey,
-    LoginRefreshToken,
-    LoginViaAnonymousAccount,
-    LoginViaCellphone,
-    LoginViaCookie,
-    LoginViaEmail,
-    SetSendRegisterVerifcationCodeViaCellphone,
-)
+from pyncm.apis.login import (GetCurrentLoginStatus, GetLoginQRCodeUrl,
+                              LoginLogout, LoginQrcodeCheck, LoginQrcodeUnikey,
+                              LoginRefreshToken, LoginViaAnonymousAccount,
+                              LoginViaCellphone, LoginViaCookie, LoginViaEmail,
+                              SetSendRegisterVerifcationCodeViaCellphone)
 
-from utils import random_uppercase, fancy_title, emoji_number, EGGS
-
+from utils import EGGS, emoji_number, fancy_title, random_uppercase
 
 title = random_uppercase('nacman')
 
-st.set_page_config(page_title=title + " 📀", page_icon=":dvd:", layout="centered")
+st.set_page_config(
+    page_title=title,
+    page_icon=":dvd:",
+    layout="centered"
+)
 
 title = ":dvd: " + (EGGS[title] if title in EGGS else fancy_title(title))
 
@@ -66,19 +61,21 @@ with phone_tab:
     phone = st.text_input("Cellphone Number", key="phone")
     phone_valid = re.match(r"^1\d{10}$", phone)
 
-    verification_code_tab, password_tab = st.tabs(["Verification Code", "Password"])
+    sms_code_tab, password_tab = st.tabs(
+        ["SMS Verification Code", "Password"])
 
-    with verification_code_tab.container(horizontal=True, vertical_alignment="bottom"):
-        sms_code = st.text_input("Verification Code", key="verification_code")
+    with sms_code_tab.container(horizontal=True, vertical_alignment="bottom"):
+        sms_code = st.text_input("SMS Verification Code", key="sms_code")
         st.button(
-            "Send Verification Code", key="send_verification_code",
+            "Send SMS Verification Code", key="send_sms_code",
             disabled=not phone_valid,
             on_click=SetSendRegisterVerifcationCodeViaCellphone,  # type: ignore
             args=(phone,)
         )
 
     with password_tab:
-        password = st.text_input("Password", key="phone_password", type="password")
+        password = st.text_input(
+            "Password", key="phone_password", type="password")
 
     st.button(
         "Login", key="phone_login", width="stretch",
@@ -119,7 +116,8 @@ with email_tab:
     email_valid = re.match(r"^[\w.%+-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$", email)
 
     with st.container(horizontal=True, vertical_alignment="bottom"):
-        password = st.text_input("Password", key="email_password", type="password")
+        password = st.text_input(
+            "Password", key="email_password", type="password")
         # FIXME: Code: 8821, 需要行为验证码验证
         st.button(
             "Login", key="email_login",

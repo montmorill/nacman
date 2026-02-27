@@ -3,21 +3,19 @@ from enum import StrEnum
 from functools import cache, cached_property
 from typing import Any
 
-from pyncm import apis
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (BaseModel, ConfigDict, Field, ValidationError,
+                      field_validator, model_validator)
 from pydantic.alias_generators import to_camel
-
-
-class AudioInfo(BaseModel):
-    size: int
-    bitrate: int = Field(alias="br")
-    file_id: int = Field(alias="fid")
-    volume_delta: float = Field(alias="vd")
-    sample_rate: int = Field(alias="sr")
+from pyncm import apis
 
 
 class BaseEntity(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        validate_by_name=True,
+        validate_by_alias=True,
+    )
+
     id: int
     name: str
     translations: list[str] = Field(alias="tns", default_factory=list)
@@ -31,15 +29,38 @@ class Artist(BaseEntity):
     pass
 
 
-class Album(BaseEntity):
+class BaseAlbum(BaseEntity):
     pic_url: str
 
 
 class AudioQuality(StrEnum):
-    STANDARD = "Standard"
-    HIGHER = "Higher"
-    EXHIGH = "ExHigh"
-    LOSSLESS = "Lossless"
+    STANDARD = "standard"
+    HIGHER = "higher"
+    EXHIGH = "exhigh"
+    LOSSLESS = "lossless"
+
+
+class AudioInfo(BaseModel):
+    size: int
+    bit_rate: int = Field(alias="br")
+    file_id: int = Field(alias="fid")
+    volume_delta: float = Field(alias="vd")
+    sample_rate: int = Field(alias="sr")
+
+
+class AudioDetail(BaseModel):
+    id: int
+    url: str
+    type: str
+    level: AudioQuality | None = None
+    bit_rate: int = Field(alias="br")
+    simple_rate: int = Field(alias="sr")
+    size: int
+    md5: str
+    gain: float | None = None
+    peak: float | None = None
+    closed_gain: float | None = None
+    closed_peak: float | None = None
 
 
 class LyricData(BaseModel):
@@ -53,22 +74,14 @@ class TrackLyrics(BaseModel):
     romanized: LyricData = Field(alias="romalrc", default_factory=LyricData)
 
 
-class Track(BaseEntity):
+class BaseTrack(BaseEntity):
     artists: list[Artist] = Field(alias="ar")
-    album: Album = Field(alias="al")
-    publish_time: datetime
     duration: timedelta = Field(alias="dt")
     track_number: int = Field(alias="no")
-    is_single: bool = Field(alias="single")
     music_video_id: int = Field(alias="mv")
     radio_program_id: int = Field(alias="djId")
     popularity: int = Field(alias="pop")
     qualities: dict[AudioQuality, AudioInfo]
-
-    @field_validator("publish_time", mode="before")
-    @classmethod
-    def parse_publish_time(cls, v: Any) -> datetime:
-        return datetime.fromtimestamp(v / 1000) if isinstance(v, int) else v
 
     @field_validator("duration", mode="before")
     @classmethod
@@ -93,21 +106,56 @@ class Track(BaseEntity):
             }
         return data
 
-    @property
-    def title(self) -> str:
-        return f"{self.name} - {'/'.join(artist.name for artist in self.artists)}"
-
     @cached_property
     def highest_quality(self) -> AudioQuality:
-        return max(self.qualities.keys(), key=lambda k: self.qualities[k].bitrate)
+        return max(
+            self.qualities.keys(),
+            key=lambda k: self.qualities[k].bit_rate
+        )
 
     @cache
-    def detail(self, quality: AudioQuality) -> dict[str, Any]:
-        bitrate = self.qualities.get(quality, self.qualities[self.highest_quality]).bitrate
-        response = apis.track.GetTrackAudio([self.id], bitrate=bitrate)
-        return response["data"][0]  # type: ignore
+    def detail(self, quality: AudioQuality) -> AudioDetail | None:
+        if (info := self.qualities.get(quality)) is None:
+            info = self.qualities[self.highest_quality]
+        response = apis.track.GetTrackAudio([self.id], bitrate=info.bit_rate)
+        try:
+            return AudioDetail(**response["data"][0])# type: ignore
+        except ValidationError:
+            return None
 
     @cached_property
     def lyrics(self) -> TrackLyrics:
         response = apis.track.GetTrackLyrics(str(self.id))
         return TrackLyrics(**response)  # type: ignore
+
+
+class Track(BaseTrack):
+    album: BaseAlbum = Field(alias="al")
+    publish_time: datetime
+    is_single: bool = Field(alias="single")
+
+    @field_validator("publish_time", mode="before")
+    @classmethod
+    def parse_publish_time(cls, v: Any) -> datetime:
+        return datetime.fromtimestamp(v / 1000) if isinstance(v, int) else v
+
+
+class AlbumInfo(BaseAlbum):
+    blur_pic_url: str
+    artist: Artist
+    artists: list[Artist]
+    company: str
+    company_id: int = 0
+    brief_desc: str = ""
+    description: str | None = None
+    type: str
+    sub_type: str
+    size: int
+    tag: str = ""
+    award_tags: None
+    display_tags: None
+
+
+class Album(BaseModel):
+    songs: list[BaseTrack]
+    info: AlbumInfo = Field(alias="album")

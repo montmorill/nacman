@@ -1,14 +1,13 @@
-from functools import cache
 from math import isqrt
 
 import streamlit as st
 from pyncm.apis.cloudsearch import GetSearchResult
 
 from models import AudioQuality, Track
-from renderer import Display, render_track_card, render_track_item, render_track_list_style
+from renderer import (DisplayOption, render_track_card, render_track_item,
+                      render_track_list_style)
 
 st.set_page_config(page_title="Search", page_icon=":dvd:", layout="wide")
-
 
 with st.sidebar:
     view = st.radio(
@@ -20,9 +19,12 @@ with st.sidebar:
 
     displays = st.pills(
         label="Display",
-        options=Display,
+        options=DisplayOption,
         key="display",
-        default=[Display.COVER, Display.DOWNLOAD],
+        default=[
+            DisplayOption.COVER,
+            DisplayOption.DOWNLOAD,
+        ],
         selection_mode="multi"
     )
 
@@ -37,7 +39,6 @@ with st.sidebar:
     quality = st.radio(
         label="Quality",
         key="quality",
-        horizontal=True,
         options=list(AudioQuality),
         help="Will fallback to highest quality if not available."
     )
@@ -47,10 +48,15 @@ if not (keyword := st.text_input("Search for songs...")):
     st.stop()
 
 
-@cache
+@st.cache_data
 def search(keyword: str, limit: int):
     response = GetSearchResult(keyword, limit=limit)
-    return response["result"]  # type: ignore
+    try:
+        return response["result"]  # type: ignore
+    except KeyError:
+        st.error(f"Search failed: {response['message']}")  # type: ignore
+        st.json(response)
+        st.stop()
 
 
 result = search(keyword, limit)
@@ -65,11 +71,11 @@ if view == "List":
     render_track_list_style()
     for track in tracks:
         with st.container(border=True):
-            render_track_item(track, displays, quality)
+            render_track_item(track.album, track, displays, quality)
 
 elif view == "Card":
     column_count = min(isqrt(len(tracks)), 4)
     columns = st.columns(column_count)
     for index, track in enumerate(tracks):
         with columns[index % column_count].container(border=True):
-            render_track_card(track, displays, quality)
+            render_track_card(track.album, track, displays, quality)

@@ -1,10 +1,12 @@
 from enum import StrEnum
 
 import streamlit as st
-from models import AudioQuality, Track
+from streamlit.components.v2 import component
+
+from models import AudioDetail, AudioQuality, BaseAlbum, BaseTrack, Track
 
 
-class Display(StrEnum):
+class DisplayOption(StrEnum):
     COVER = "Cover"
     ALBUM = "Album"
     DOWNLOAD = "Download"
@@ -14,18 +16,26 @@ class Display(StrEnum):
     DETAILS = "Details"
 
 
-def render_download_button(track: Track, quality: AudioQuality, **kwargs):
-    detail = track.detail(quality)
-    st.download_button(
-        label="Download",
-        key=f"download_{track.id}",
-        data=detail["url"],
-        file_name=f"{track.title}.{detail['type']}",
-        **kwargs
-    )
+def render_audio(detail: AudioDetail | None):
+    if detail is None:
+        st.error("No audio available due to copyright issues.")
+    else:
+        st.audio(detail.url)
 
 
-def render_lyrics(track: Track):
+def render_download_button(track: BaseTrack, quality: AudioQuality, **kwargs):
+    if detail := track.detail(quality):
+        artists = "/".join(artist.name for artist in track.artists)
+        st.download_button(
+            label="Download",
+            key=f"download_{track.id}",
+            data=detail.url,
+            file_name=f"{track.name} - {artists}.{detail.type}",
+            **kwargs
+        )
+
+
+def render_lyrics(track: BaseTrack):
     availables = [(key, lyrics) for key, lyrics in track.lyrics if lyrics.text]
     if len(availables) > 1:
         tabs = st.tabs([key.capitalize() for (key, _) in availables])
@@ -53,85 +63,127 @@ def render_track_list_style():
 
 
 @st.fragment
-def render_track_item(track: Track, displays: list[Display], quality: AudioQuality):
-    if Display.QUALITY in displays:
+def render_track_item(
+    album: BaseAlbum,
+    track: BaseTrack,
+    displays: list[DisplayOption],
+    quality: AudioQuality
+):
+    if DisplayOption.QUALITY in displays:
         quality = st.session_state.get(f"quality_{track.id}", quality)
 
-    info, audio = st.columns([3, 2])
+    info, audio = st.columns([3, 2], vertical_alignment="center")
 
     with info.container(horizontal=True, vertical_alignment="center"):
-        if Display.COVER in displays:
-            st.image(track.album.pic_url, width=48)
+        if DisplayOption.COVER in displays:
+            st.image(album.pic_url, width=48)
 
         title = track.name
-        if Display.ALBUM in displays:
-            title = f"{track.album.name} - {title}"
+        if DisplayOption.ALBUM in displays:
+            title = f"<a href='/album?id={album.id}'>{album.name}</a> - {title}"
 
         subtitle = " / ".join(artist.name for artist in track.artists)
-        if Display.TRACK_ID in displays:
+        if DisplayOption.TRACK_ID in displays:
             subtitle = f"#{track.id} {subtitle}"
 
-        st.html(f'''\
-<div class="nac-truncate">
-    <div class="nac-truncate">{title}</div>
-    <div class="nac-subtitle">{subtitle}</div>
-</div>''')
+        st.html(f'''
+        <div class="nac-truncate">
+            <div class="nac-truncate">{title}</div>
+            <div class="nac-subtitle">{subtitle}</div>
+        </div>''')
 
-        if Display.DOWNLOAD in displays:
+        if DisplayOption.DOWNLOAD in displays:
             render_download_button(track, quality)
 
-        if Display.QUALITY in displays:
+        if DisplayOption.QUALITY in displays:
             st.selectbox(
                 "Quality", track.qualities.keys(),
                 key=f"quality_{track.id}",
-                index=len(track.qualities.keys()) - 1,
                 label_visibility="collapsed",
                 width=120,
             )
 
-    with audio.container(height="stretch", horizontal=True, vertical_alignment="center"):
-        st.audio(track.detail(quality)["url"])
+    with audio.container(horizontal=True, vertical_alignment="center"):
+        render_audio(track.detail(quality))
 
-    if Display.LYRICS in displays:
+    if DisplayOption.LYRICS in displays:
         render_lyrics(track)
 
-    if Display.DETAILS in displays:
+    if DisplayOption.DETAILS in displays:
         st.json(track.model_dump_json())
 
 
 @st.fragment
-def render_track_card(track: Track, displays: list[Display], quality: AudioQuality):
-    if Display.QUALITY in displays:
+def render_track_card(
+    album: BaseAlbum,
+    track: BaseTrack,
+    displays: list[DisplayOption],
+    quality: AudioQuality
+):
+    if DisplayOption.QUALITY in displays:
         quality = st.session_state.get(f"quality_{track.id}", quality)
 
     with st.container(horizontal=True, horizontal_alignment="distribute"):
         caption = track.name
 
-        if Display.ALBUM in displays:
-            caption = f"{track.album.name} - {caption}"
-        if Display.TRACK_ID in displays:
+        if DisplayOption.ALBUM in displays:
+            caption = f"{album.name} - {caption}"
+        if DisplayOption.TRACK_ID in displays:
             caption = f"{caption} #{track.id}"
 
-        if Display.COVER in displays:
-            st.image(track.album.pic_url, width="stretch", caption=caption)
+        if DisplayOption.COVER in displays:
+            st.image(album.pic_url, width="stretch", caption=caption)
         else:
             st.text(caption)
 
-        st.audio(track.detail(quality)["url"])
+        render_audio(track.detail(quality))
 
-        if Display.QUALITY in displays:
+        if DisplayOption.QUALITY in displays:
             st.select_slider(
                 "Quality", track.qualities.keys(),
                 key=f"quality_{track.id}",
-                value=track.highest_quality,
                 label_visibility="collapsed"
             )
 
-        if Display.DOWNLOAD in displays:
+        if DisplayOption.DOWNLOAD in displays:
             render_download_button(track, quality, width="stretch")
 
-    if Display.LYRICS in displays:
+    if DisplayOption.LYRICS in displays:
         render_lyrics(track)
 
-    if Display.DETAILS in displays:
+    if DisplayOption.DETAILS in displays:
         st.json(track.model_dump_json())
+
+
+use_location = component(
+    "use_location",
+    js="""
+    export default function (component) {
+    if (component.data !== null) {
+        let url = window.location.pathname;
+        const search = 'search' in component.data
+        ? component.data.search
+        : window.location.search.slice(1);
+        const hash = 'hash' in component.data
+        ? component.data.hash
+        : window.location.hash.slice(1);
+        if (search) url += '?' + search;
+        if (hash) url += '#' + hash;
+        if (url !== window.location.pathname
+        + window.location.search
+        + window.location.hash) {
+        history.pushState({}, '', url);
+        }
+    }
+
+    function updateState() {
+        component.setStateValue('hash', window.location.hash.slice(1));
+        component.setStateValue('search', window.location.search.slice(1));
+    }
+
+    updateState();
+    window.addEventListener('popstate', updateState);
+    return () => window.removeEventListener('popstate', updateState);
+    }
+"""
+)
