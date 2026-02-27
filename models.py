@@ -168,6 +168,7 @@ class Album(BaseModel):
     songs: list[BaseTrack]
     info: AlbumInfo = Field(alias="album")
 
+    @cache
     def comments(self, page=0) -> "AlbumComments":
         CHUNK_SIZE = 20
         response = GetAlbumComments(
@@ -213,6 +214,3 @@ class AlbumComments(BaseModel):
     comments: list[Comment]
     total_count: int | None = None
     more: bool = False
-
-    def get_comments(self, hot: bool = False) -> list[Comment]:
-        return self.hot_comments if hot else self.comments

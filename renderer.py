@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from enum import StrEnum
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, Literal, TypedDict
 from urllib.parse import parse_qs, urlencode
 
 import streamlit as st
@@ -159,14 +159,18 @@ def render_track_card(
         st.json(track.model_dump())
 
 
-def render_comment(comment: Comment, hot=False):
+def render_comment(comment: Comment, many_emojis=False, hot=False):
     st.image(comment.user.avatar_url, width=36)
     with st.container(gap=None):
+        emoji = ":fire:" if hot else ":heart:"
         st.markdown(f"""
         **{comment.user.nickname}**
         {comment.time_str}
-        {":fire:" if hot else ":heart:" if comment.liked_count else ""}
-        {comment.liked_count if comment.liked_count else ""}
+        {
+            emoji * comment.liked_count
+            if many_emojis else
+            f"{emoji} {comment.liked_count}" if comment.liked_count else ""
+        }
         """)
         st.text(comment.content)
 
@@ -179,7 +183,7 @@ class AlbumCommentStore(TypedDict):
 
 
 @st.fragment
-def render_album_comments(album: Album):
+def render_album_comments(album: Album, many_emojis=False):
     store_key = f"comments_{album.info.id}"
     sentinel_key = f"comments_sentinel_{album.info.id}"
 
@@ -213,14 +217,14 @@ def render_album_comments(album: Album):
     # Hot comments
     for comment in store["hot_comments"]:
         with st.container(horizontal=True):
-            render_comment(comment, hot=True)
+            render_comment(comment, many_emojis, hot=True)
     if store["hot_comments"]:
         st.divider()
 
     # Regular comments
     for comment in store["comments"]:
         with st.container(horizontal=True):
-            render_comment(comment)
+            render_comment(comment, many_emojis)
 
     if store["more"]:
         viewport_sentinel(key=sentinel_key)
