@@ -163,14 +163,14 @@ def render_comment(comment: Comment, hot=False,
                    many_emojis=False, zero_counts=False):
     st.image(comment.user.avatar_url, width=36)
     with st.container(gap=None):
-        emoji = ":fire:" if hot else ":heart:"
+        emoji = "🔥" if hot else "❤️"
         st.markdown(f"""
         **{comment.user.nickname}**
         {comment.time_str}
         {
             emoji * comment.liked_count
             if many_emojis else
-            f"{emoji} {comment.liked_count}"
+            f"{emoji}{comment.liked_count}"
             if zero_counts or comment.liked_count else ""
         }
         """)
@@ -230,6 +230,7 @@ def render_album_comments(album: Album, **kwargs):
 
     if store["more"]:
         viewport_sentinel(key=sentinel_key)
+        st.info("Loading more comments...", icon="⏳")
     else:
         st.divider()
         st.text("No more comments.", width="stretch", text_alignment="center")
