@@ -3,6 +3,7 @@ from enum import StrEnum
 from typing import Any, Callable, TypedDict
 from urllib.parse import parse_qs, urlencode
 
+from pydantic import BaseModel, Field
 import streamlit as st
 from streamlit.components.v2 import component
 
@@ -131,7 +132,7 @@ def render_track_card(
         caption = track.name
 
         if DisplayOption.ALBUM in displays:
-            caption = f"{album.name} - {caption}"
+            caption = f"[{album.name}](/album?id={album.id}) - {caption}"
         if DisplayOption.TRACK_ID in displays:
             caption = f"{caption} #{track.id}"
 
@@ -236,72 +237,43 @@ def render_album_comments(album: Album, **kwargs):
         st.text("No more comments.", width="stretch", text_alignment="center")
 
 
-class Location(TypedDict):
-    search: str
-    hash: str
+class Location(BaseModel):
+    search: dict[str, str] = Field(default_factory=dict)
+    hash: str = ""
 
 
 @contextmanager
-def url_params(location_key: str = "location", **params: tuple[str, Callable[[str], Any]]):
-    """Bidirectional sync between URL search params and session state.
-
-    Usage::
-
-        with url_params(id=("album_id", int)):
-            album_id = st.number_input("Album ID", key="album_id", step=1)
-
-    Args:
-        **params: url_param=(session_state_key, converter)
-    """
-    synced_key = f"_{location_key}_synced"
-
-    # Read: URL → session_state (first render only)
-    location: Location | None = st.session_state.get(location_key)
-    if location and synced_key not in st.session_state:
-        search_params = parse_qs(location.get("search", ""))
-        for url_param, (state_key, converter) in params.items():
-            if values := search_params.get(url_param):
-                st.session_state[state_key] = converter(values[0])
-        st.session_state[synced_key] = True
-
-    yield
-
-    # Write: session_state → URL
-    data = None
-    if st.session_state.get(synced_key):
-        encoded = {}
-        for url_param, (state_key, converter) in params.items():
-            if (value := st.session_state.get(state_key)) is not None:
-                encoded[url_param] = converter(value)
-        if encoded:
-            data = {"search": urlencode(encoded)}
-    use_location(key=location_key, data=data)
+def location(key: str):
+    if key in st.session_state:
+        yield (loc := Location.model_validate(st.session_state[key]))
+        use_location(key=key, data=loc.model_dump())
+    else:
+        yield Location.model_validate(use_location())
 
 
 use_location = component(
     "use_location",
-    js="""
+    js="""//js
     export default function (component) {
     if (component.data !== null) {
         let url = window.location.pathname;
         const search = 'search' in component.data
-                    ? component.data.search
+                    ? new URLSearchParams(component.data.search).toString()
                     : window.location.search.slice(1);
         const hash = 'hash' in component.data
                     ? component.data.hash
                     : window.location.hash.slice(1);
-        if (search) url += '?' + search;
-        if (hash) url += '#' + hash;
-        if (url !== window.location.pathname
-                    + window.location.search
-                    + window.location.hash) {
-        history.pushState({}, '', url);
+        if (search) url += '?' + search.toString();
+        if (hash) url += '#' + hash.toString();
+        if (search !== window.location.search
+            || hash !== window.location.hash) {
+            history.pushState({}, '', url);
         }
     }
 
     function updateState() {
         component.setStateValue('hash', window.location.hash.slice(1));
-        component.setStateValue('search', window.location.search.slice(1));
+        component.setStateValue('search', Object.fromEntries(new URLSearchParams(window.location.search)));
     }
 
     updateState();
@@ -313,7 +285,7 @@ use_location = component(
 
 viewport_sentinel = component(
     "viewport_sentinel",
-    js="""
+    js="""//js
     export default function (component) {
         const rootMargin = component.data?.rootMargin || '0px';
         const sentinel = document.createElement('div');

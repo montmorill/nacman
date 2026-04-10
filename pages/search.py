@@ -4,7 +4,7 @@ import streamlit as st
 from pyncm.apis.cloudsearch import GetSearchResult
 
 from models import AudioQuality, Track
-from renderer import (DisplayOption, render_track_card, render_track_item,
+from renderer import (DisplayOption, location, render_track_card, render_track_item,
                       render_track_list_style)
 
 st.set_page_config(page_title="Search", page_icon=":dvd:", layout="wide")
@@ -23,6 +23,7 @@ with st.sidebar:
         key="display",
         default=[
             DisplayOption.COVER,
+            DisplayOption.ALBUM,
             DisplayOption.DOWNLOAD,
         ],
         selection_mode="multi"
@@ -44,7 +45,11 @@ with st.sidebar:
     )
 
 
-if not (keyword := st.text_input("Search for songs...")):
+with location("location_search") as loc:
+    keyword = st.text_input("Search for songs...", loc.search.get("keyword", ""))
+    loc.search["keyword"] = keyword
+
+if not keyword:
     st.stop()
 
 

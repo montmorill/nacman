@@ -3,13 +3,16 @@ from pyncm.apis.album import GetAlbumInfo
 
 from models import Album
 from renderer import (AudioQuality, DisplayOption, render_album_comments,
-                      render_track_item, render_track_list_style, url_params)
+                      render_track_item, render_track_list_style, location)
+
 
 st.set_page_config(page_title="Album", page_icon=":dvd:", layout="wide")
 
 
-with url_params(id=("album_id", int)):
-    album_id = st.number_input(label="Album ID", key="album_id", step=1)
+with location("location_album") as loc:
+    value = int(loc.search.get("id", 0))
+    album_id = st.number_input(label="Album ID", value=value, step=1)
+    loc.search["id"] = str(album_id)
 
 
 @st.cache_data
